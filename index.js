@@ -1,57 +1,31 @@
-// 📚 Express + Axios + Cheerio API to scrape books.toscrape.com
+// ✅ Express API + Local Cache + Bot Command for "ThisPersonDoesNotExist"
 
-const express = require('express');
-const axios = require('axios');
-const cheerio = require('cheerio');
+// 📦 Server: api/fakeface (saves images locally)
+const express = require("express");
+const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
 const app = express();
+
 const PORT = 3000;
+const CACHE_DIR = path.join(__dirname, "cache", "fakefaces");
 
-// 🧠 In-memory cache to simulate local storage
-const bookCache = {}; // { 1: [...books], 2: [...books], etc }
-
-// 📘 Scrape a specific page from books.toscrape.com
-async function scrapeBooksPage(pageNumber = 1) {
-  const url = `http://books.toscrape.com/catalogue/page-${pageNumber}.html`;
+app.get("/fakeface", async (req, res) => {
   try {
-    const res = await axios.get(url);
-    const $ = cheerio.load(res.data);
+    const filename = `face_${Date.now()}.jpg`;
+    const savePath = path.join(CACHE_DIR, filename);
 
-    const books = [];
-    $('.product_pod').each((i, el) => {
-      const title = $(el).find('h3 a').attr('title');
-      const price = $(el).find('.price_color').text();
-      const image = $(el).find('img').attr('src');
-      const fullImage = image ? `http://books.toscrape.com/${image.replace('../', '')}` : '';
-
-      books.push({ title, price, image: fullImage });
+    await fs.ensureDir(CACHE_DIR);
+    const imgRes = await axios.get("https://thispersondoesnotexist.com", {
+      responseType: "arraybuffer"
     });
+    await fs.writeFile(savePath, imgRes.data);
 
-    return books;
+    res.sendFile(savePath);
   } catch (err) {
-    return null; // Invalid or non-existent page
+    console.error("❌ /fakeface error:", err.message);
+    res.status(500).json({ error: "Failed to fetch face." });
   }
-}
-
-// 🚀 API endpoint: /books?pageNumber=1
-app.get('/books', async (req, res) => {
-  const pageNumber = parseInt(req.query.pageNumber) || 1;
-
-  // Check cache first
-  if (bookCache[pageNumber]) {
-    return res.json({ page: pageNumber, cached: true, books: bookCache[pageNumber] });
-  }
-
-  const books = await scrapeBooksPage(pageNumber);
-
-  if (!books) {
-    return res.status(404).json({ error: 'Page not found or failed to scrape.' });
-  }
-
-  // Store in memory (simulate local storage)
-  bookCache[pageNumber] = books;
-  res.json({ page: pageNumber, cached: false, books });
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ FakeFace API running at http://localhost:${PORT}`));
